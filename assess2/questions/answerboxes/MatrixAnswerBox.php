@@ -47,6 +47,7 @@ class MatrixAnswerBox implements AnswerBox
         }
 
         $ansformats = array_map('trim', explode(',', $answerformat));
+        $dispformats = array_map('trim', explode(',', $displayformat));
 
         if ($multi) {$qn = ($qn + 1) * 1000 + $partnum;}
 
@@ -54,27 +55,35 @@ class MatrixAnswerBox implements AnswerBox
             $out .= $ansprompt;
         }
         if (!empty($answersize)) {
-            $tip = _('Enter each element of the matrix as  number (like 5, -3, 2.2)');
+            $tip = _('Enter each element of the matrix as number (like 5, -3, 2.2)');
             $shorttip = _('Enter an integer or decimal number');
             if ($reqdecimals!=='') {
+                list($reqdecimals, $exactreqdec, $reqdecoffset, $reqdecscoretype) = parsereqsigfigs($reqdecimals);
+
                 $tip .= "<br/>" . sprintf(_('Your numbers should be accurate to %d decimal places.'), $reqdecimals);
                 $shorttip .= sprintf(_(", accurate to at least %d decimal places"), $reqdecimals);
             }
             if (empty($answerboxsize)) {$answerboxsize = 3;}
-            if ($colorbox == '') {
-                $out .= '<div id="qnwrap' . $qn . '">';
+            if (in_array('inline', $dispformats)) {
+                $style = ' style="display:inline-block;vertical-align:middle"';
             } else {
-                $out .= '<div class="' . $colorbox . '" id="qnwrap' . $qn . '">';
+                $style = '';
             }
+            if ($colorbox == '') {
+                $out .= '<div id="qnwrap' . $qn . '"' . $style . '>';
+            } else {
+                $out .= '<div class="' . $colorbox . '" id="qnwrap' . $qn . '"' . $style . '>';
+            }
+            $answersize = explode(",", $answersize);
             $arialabel = $this->answerBoxParams->getQuestionIdentifierString() .
+                ' ' . sprintf(_('matrix entry with %d rows and %d columns'), $answersize[0], $answersize[1]) .
                 (!empty($readerlabel) ? ' ' . Sanitize::encodeStringForDisplay($readerlabel) : '');
             $out .= '<table role="group" aria-label="' . $arialabel . '">';
-            if ($displayformat == 'det') {
+            if (in_array('det', $dispformats)) {
                 $out .= '<tr><td class="matrixdetleft">&nbsp;</td><td>';
             } else {
                 $out .= '<tr><td class="matrixleft">&nbsp;</td><td>';
             }
-            $answersize = explode(",", $answersize);
             if (isset($GLOBALS['capturechoices'])) {
                 $GLOBALS['answersize'][$qn] = $answersize;
             }
@@ -96,8 +105,7 @@ class MatrixAnswerBox implements AnswerBox
                     ];
 
                     $out .= '<input ' .
-                    'aria-label="' . sprintf(_('Cell %d of %d'), $count + 1, $cellcnt) . '" ' .
-                    Sanitize::generateAttributeString($attributes) .
+                        Sanitize::generateAttributeString($attributes) .
                         '" />';
 
                     $out .= "</td>\n";
@@ -106,7 +114,7 @@ class MatrixAnswerBox implements AnswerBox
                 $out .= "</tr>";
             }
             $out .= '</table>';
-            if ($displayformat == 'det') {
+            if (in_array('det', $dispformats)) {
                 $out .= '</td><td class="matrixdetright">&nbsp;</td></tr></table>';
             } else {
                 $out .= '</td><td class="matrixright">&nbsp;</td></tr></table>';
@@ -127,6 +135,7 @@ class MatrixAnswerBox implements AnswerBox
             $shorttip = _('Enter a matrix of integer or decimal numbers');
             $tip = _('Enter your answer as a matrix filled with integer or decimal numbers, like [(2,3,4),(3,4,5)]');
             if ($reqdecimals !== '') {
+                list($reqdecimals, $exactreqdec, $reqdecoffset, $reqdecscoretype) = parsereqsigfigs($reqdecimals);
                 $tip .= "<br/>" . sprintf(_('Your numbers should be accurate to %d decimal places.'), $reqdecimals);
             }
 

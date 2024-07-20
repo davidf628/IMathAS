@@ -59,9 +59,13 @@ class LTI_Message_Launch {
      */
     public static function from_cache($launch_id, Database $database, Cache $cache = null) {
         $new = new LTI_Message_Launch($database, $cache, null);
-        $new->launch_id = $launch_id;
-        $new->jwt = [ 'body' => $new->cache->get_launch_data($launch_id) ];
-        return $new->validate_registration();
+        if ($new->cache->get_launch_data($launch_id) !== false) {
+            $new->launch_id = $launch_id;
+            $new->jwt = [ 'body' => $new->cache->get_launch_data($launch_id) ];
+            return $new->validate_registration();
+        } else {
+            throw new LTI_Exception("Unable to load launch from cache.", 1);
+        }
     }
 
     /**
@@ -282,17 +286,24 @@ class LTI_Message_Launch {
         } else {
           return $duedate;
         }
+      } else if (!empty($custom['link_user_end_sub_time']) && 
+        ($duedate = strtotime($custom['link_user_end_sub_time'])) !== false) {
+        // use user-based sub time if set and valid
+        return $duedate;
       } else if (!empty($custom['link_end_sub_time'])) {
+        // if general sub time is set but invalid, and avail_time values aren't set or valid either
+        // then treat as available always
         $duedate = strtotime($custom['link_end_sub_time']);
         if ($duedate === false) {
-          return 2000000000;
-        } else {
-          return $duedate;
-        }
-      } else if (!empty($custom['link_end_avail_time'])) {
-        $duedate = strtotime($custom['link_end_avail_time']);
-        if ($duedate === false) {
-          return 2000000000;
+          if (!empty($custom['link_user_end_avail_time']) &&
+            ($duedate = strtotime($custom['link_user_end_avail_time'])) !== false) {
+            return $duedate;
+          } else if (!empty($custom['link_end_avail_time']) && 
+            ($duedate = strtotime($custom['link_end_avail_time'])) !== false) {
+            return $duedate;
+          } else {
+            return 2000000000;
+          }
         } else {
           return $duedate;
         }

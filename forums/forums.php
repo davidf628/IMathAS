@@ -2,11 +2,11 @@
 	//Listing of all forums for a course - not being used
 	//(c) 2006 David Lippman
 
-	require("../init.php");
+	require_once "../init.php";
 	if (!isset($teacherid) && !isset($tutorid) && !isset($studentid)) {
-	   require("../header.php");
+	   require_once "../header.php";
 	   echo "You are not enrolled in this course.  Please return to the <a href=\"../index.php\">Home Page</a> and enroll\n";
-	   require("../footer.php");
+	   require_once "../footer.php";
 	   exit;
     }
     $isteacher = isset($teacherid);
@@ -53,7 +53,7 @@
 	$placeinhead .= '<script type="text/javascript" src="'.$staticroot.'/javascript/thread.js"></script>';
 	$placeinhead .= "<script type=\"text/javascript\">var AHAHsaveurl = '" . $GLOBALS['basesiteurl'] . "/forums/savetagged.php?cid=$cid';</script>";
 
-	require("../header.php");
+	require_once "../header.php";
 	echo "<div class=breadcrumb>$breadcrumbbase <a href=\"../course/course.php?cid=$cid\">".Sanitize::encodeStringForDisplay($coursename)."</a> &gt; ";
 	if ($searchtype != 'none') {
 		echo "<a href=\"forums.php?cid=$cid&amp;clearsearch=true\">Forum List</a> &gt; ";
@@ -83,7 +83,7 @@
 	//pull exceptions, as they may extend the enddate
 	$exceptions = array();
 	if (isset($studentid) && !$inInstrStuView && count($forumdata)>0) {
-		require_once("../includes/exceptionfuncs.php");
+		require_once "../includes/exceptionfuncs.php";
 		$exceptionfuncs = new ExceptionFuncs($userid, $cid, true, $studentinfo['latepasses'], $latepasshrs);
 		$ph = Sanitize::generateQueryPlaceholders($forumdata);
 		$stm = $DBH->prepare("SELECT startdate,enddate,islatepass,waivereqscore,itemtype,assessmentid FROM imas_exceptions WHERE assessmentid in ($ph) AND userid=? AND (itemtype='F' OR itemtype='P' OR itemtype='R')");
@@ -241,7 +241,6 @@ if ($searchtype == 'thread') {
 		$arr[] = $userid;
 	}
 
-	$query .= " ORDER BY imas_forum_threads.lastposttime DESC";
 	$stm = $DBH->prepare($query);
 	$stm->execute($arr);
 	$result=$stm->fetchALL(PDO::FETCH_ASSOC);
@@ -328,7 +327,7 @@ if ($searchtype == 'thread') {
 	 } else {
 	   $itemicons = $CFG['CPS']['itemicons'];
 	 }
-	require_once("../includes/filehandler.php");
+	require_once "../includes/filehandler.php";
 	$now = time();
 	if ($searchstr != '') {
 		$searchstr = trim(str_replace(' and ', ' ',$searchstr));
@@ -442,7 +441,7 @@ if ($searchtype == 'thread') {
 		$query .= "AND (imas_forum_threads.stugroupid=0 OR imas_forum_threads.stugroupid IN (SELECT stugroupid FROM imas_stugroupmembers WHERE userid=:userid )) ";
 		$qarr[':userid']=$userid;
 	}
-	$query .= "GROUP BY imas_forum_threads.forumid ORDER BY imas_forums.id";
+	$query .= "GROUP BY imas_forum_threads.forumid";
 	$stm = $DBH->prepare($query);
 	$stm->execute($qarr);
 	$result=$stm->fetchALL(PDO::FETCH_NUM);
@@ -470,7 +469,7 @@ if ($searchtype == 'thread') {
 		$query .= "AND (imas_forum_threads.stugroupid=0 OR imas_forum_threads.stugroupid IN (SELECT stugroupid FROM imas_stugroupmembers WHERE userid=:userid )) ";
 		$qarr[':userid']=$userid;
 	}
-	$query .= "GROUP BY imas_forum_posts.forumid ORDER BY imas_forums.id";
+	$query .= "GROUP BY imas_forum_posts.forumid";
 	$stm = $DBH->prepare($query);
 	$stm->execute($qarr);
 
@@ -585,5 +584,5 @@ if ($searchtype == 'thread') {
 <?php
 	}
 }
-	require("../footer.php");
+	require_once "../footer.php";
 ?>

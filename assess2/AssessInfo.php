@@ -4,8 +4,8 @@
  * (c) 2019 David Lippman
  */
 
-require_once(__DIR__ . '/../includes/exceptionfuncs.php');
-require_once(__DIR__ . '/../includes/Rand.php');
+require_once __DIR__ . '/../includes/exceptionfuncs.php';
+require_once __DIR__ . '/../includes/Rand.php';
 /**
  * Primary class for working with assessment settings
  */
@@ -32,7 +32,7 @@ class AssessInfo
   *                           or an array of question IDs.
   * @param bool $forcecodeload true to force load of question code
   */
-  function __construct($DBH, $aid, $cid, $questions = false, $forcecodeload = false) {
+  public function __construct($DBH, $aid, $cid, $questions = false, $forcecodeload = false) {
     $this->DBH = $DBH;
     $this->curAid = $aid;
     $this->cid = $cid;
@@ -118,7 +118,7 @@ class AssessInfo
     // resets, in case we're using setException multiple times
     $resetkeys = ['exceptionpenalty','original_enddate','extended_with',
         'timeext','attemptext', 'startdate', 'enddate', 'enddate_in',
-        'latepasses_avail', 'latepass_extendto'];
+        'latepasses_avail', 'latepass_extendto', 'latepass_enddate'];
     if (empty($this->resetdata)) { // set reset data on first run
         foreach ($resetkeys as $key) {
             $this->resetdata[$key] = isset($this->assessData[$key]) ? $this->assessData[$key] : null;
@@ -187,6 +187,8 @@ class AssessInfo
       $this->assessData['startdate'] = intval($this->exception[0]);
       $this->assessData['enddate'] = intval($this->exception[1]);
       $this->assessData['enddate_in'] = $this->assessData['enddate'] - time() - 5;
+
+      $this->assessData['latepass_enddate'] = max($this->assessData['latepass_enddate'], $this->assessData['enddate']);
       $this->setAvailable();
     }
 
@@ -200,6 +202,7 @@ class AssessInfo
       }
 
       $this->assessData['can_use_latepass'] = $LPneeded;
+      $this->assessData['latepass_after'] = ($this->assessData['allowlate']>10);
       $this->assessData['latepasses_avail'] = $latepasses;
 
       $LPcutoff = $this->assessData['LPcutoff'];
@@ -444,7 +447,7 @@ class AssessInfo
   public function getAllQuestionPointsAndCats() {
     $out = array();
     foreach ($this->questionData as $qid=>$v) {
-      $out[$qid] = ['points'=>$v['points_possible'], 'cat'=>$v['origcategory']];
+      $out[$qid] = ['points'=>$v['points_possible'], 'cat'=>($v['origcategory'] ?? 0)];
     }
     return $out;
   }
@@ -642,7 +645,9 @@ class AssessInfo
     //return ($showscores == 'at_end' || $showscores == 'during');
     $viewingb = $this->assessData['viewingb'];
     return ($viewingb == 'immediately' || $viewingb == 'after_take' ||
-      ($viewingb == 'after_due' && time() > $this->assessData['enddate']));
+      ($viewingb == 'after_due' && time() > $this->assessData['enddate']) ||
+      ($viewingb == 'after_lp' && time() > $this->assessData['latepass_enddate'])
+    );
   }
 
   /**
@@ -654,7 +659,8 @@ class AssessInfo
     $viewingb = $this->assessData['viewingb'];
     return ($showscores == 'at_end' || $showscores == 'during' ||
       $viewingb == 'immediately' || $viewingb == 'after_take' ||
-      ($viewingb == 'after_due' && time() > $this->assessData['enddate']));
+      ($viewingb == 'after_due' && time() > $this->assessData['enddate']) ||
+      ($viewingb == 'after_lp' && time() > $this->assessData['latepass_enddate']));
   }
 
 
@@ -1025,7 +1031,7 @@ class AssessInfo
   * @param  array $defaults  Assessment settings assoc array.
   * @return array            Normalized $settings array.
   */
-  static function normalizeQuestionSettings($settings, $defaults) {
+  public static function normalizeQuestionSettings($settings, $defaults) {
 
     if ($settings['points'] == 9999) {
       $settings['points_possible'] = $defaults['defpoints'];
@@ -1125,7 +1131,7 @@ class AssessInfo
   * @param  array $settings   Assessment settings assoc array from the database.
   * @return array             Normalized $settings.
   */
-  static function normalizeSettings($settings) {
+  public static function normalizeSettings($settings) {
     // set global assessUIver
     $GLOBALS['assessUIver'] = $settings['ver'];
     $GLOBALS['useeqnhelper'] = ($settings['eqnhelper'] > 0);
@@ -1214,6 +1220,10 @@ class AssessInfo
     }
     $settings['timelimit_multiplier'] = 1;
 
+    //unpack noprint
+    $settings['lock_for_assess'] = ($settings['noprint'] & 2);
+    $settings['noprint'] = ($settings['noprint'] & 1);
+
     //unpack intro
     $introjson = json_decode($settings['intro'], true);
     $pagebreaks = [];
@@ -1268,9 +1278,13 @@ class AssessInfo
     }
 
     //handle IP-form passwords
+    $userIP = $_SERVER['HTTP_X_FORWARDED_FOR']
+        ?? $_SERVER['REMOTE_ADDR']
+        ?? $_SERVER['HTTP_CLIENT_IP']
+        ?? '';
     if ($settings['password'] != '' &&
       preg_match('/^\d{1,3}\.(\*|\d{1,3})\.(\*|\d{1,3})\.[\d\*\-]+/', $settings['password']) &&
-      AssessUtils::isIPinRange($_SERVER['REMOTE_ADDR'], $settings['password'])
+      AssessUtils::isIPinRange($userIP, $settings['password'])
     ) {
       $settings['password'] = '';
     }
@@ -1287,6 +1301,24 @@ class AssessInfo
     if ($settings['reqscore'] < 0) {
         $settings['reqscoretype'] |= 1;
         $settings['reqscore'] = abs($settings['reqscore']);
+    }
+
+    // get latest date latepass can extend to
+    $allowlate = $settings['allowlate'];
+    if ($settings['allowlate'] == 0) {
+        $lp_enddate = $settings['enddate'];
+    } else {
+        $allowlate = ($settings['allowlate'] % 10) - 1; // ignore "allow use after"
+        if ($allowlate == 0) { // this is now "unlimited"
+            $lp_enddate = 2000000000;
+        } else {
+            $lp_enddate = strtotime("+".($GLOBALS['latepasshrs']*$allowlate)." hours", $settings['enddate']);
+        }
+    }
+    
+    $settings['latepass_enddate'] = min($lp_enddate, $GLOBALS['courseenddate']);
+    if ($settings['LPcutoff'] > 0) {
+        $settings['latepass_enddate'] = min($settings['latepass_enddate'], $settings['LPcutoff']);
     }
 
     //unpack itemorder

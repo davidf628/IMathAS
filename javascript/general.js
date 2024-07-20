@@ -172,14 +172,18 @@ jQuery(function() {
 var popupwins = [];
 function popupwindow(id,content,width,height,scroll) {
 	if (height=='fit') {
-		height = window.height - 80;
+		height = window.innerHeight - 80;
 	}
 	var attr = "width="+width+",height="+height+",status=0,resizable=1,directories=0,menubar=0";
 	if (scroll!=null && scroll==true) {
 		attr += ",scrollbars=1";
 	}
+
 	if (typeof(popupwins[id])!="undefined" && !popupwins[id].closed) {
 		popupwins[id].focus();
+        if (popupwins[id].location.href == content) {
+            return;
+        }
 	}
 	if (content.match(/^http/)) {
 		popupwins[id] = window.open(content,id,attr);
@@ -308,7 +312,8 @@ function GB_resize(e) {
 
 	gbwin.css("width", Math.max(0,gbwin.data("original_w") + dx))
 	 .css("height", Math.max(0,gbwin.data("original_h") + dy));
-	$("#GB_frameholder").css("height", Math.max(0,gbwin.data("original_h") + dy) - gbwin.data("footer_h"));
+    
+	jQuery("#GB_frameholder").css("height", Math.max(0,gbwin.data("original_h") + dy) - gbwin.data("footer_h"));
 }
 function GB_endresize(e) {
 	jQuery(window).off("touchmove.GBresize touchend.GBresize mousemove.GBresize mouseup.GBresize");
@@ -379,7 +384,7 @@ function GB_show(caption,url,width,height,overlay,posstyle,showbelow,callback) {
 			  .css("margin", 0).css("right","")
 			  .data("original_w", $(gbwin).width())
               .data("original_h", $(gbwin).height())
-              .data("footer_h", $("#GB_footer:visible").outerHeight() + $("#GB_caption").outerHeight())
+              .data("footer_h", ($("#GB_footer:visible").outerHeight() || 0) + $("#GB_caption").outerHeight())
 			  .data("original_mouse_x", (e.type=='touchstart')?touch.pageX:e.pageX)
 			  .data("original_mouse_y", (e.type=='touchstart')?touch.pageY:e.pageY);
 
@@ -456,7 +461,7 @@ function GB_show(caption,url,width,height,overlay,posstyle,showbelow,callback) {
             var belowel;
             for (var i in showbelow) {
                 if (belowel = document.getElementById(showbelow[i])) {
-                    inittop = belowel.getBoundingClientRect().bottom + 10;
+                    inittop = Math.max(0, belowel.getBoundingClientRect().bottom + 10);
                     if (height=='auto') {
 						h = (window.self !== window.top) ? Math.min(600,self.innerHeight) : self.innerHeight;
 						h = Math.max(200, h - inittop - 20);
@@ -484,7 +489,7 @@ function GB_show(caption,url,width,height,overlay,posstyle,showbelow,callback) {
 	//document.getElementById("GB_window").style.left = ((w - width)/2)+"px";
 	if (url.charAt(0)!='<') {
         var capheight = $("#GB_caption").outerHeight();
-        var footheight = $("#GB_footer:visible").outerHeight();
+        var footheight = $("#GB_footer:visible").outerHeight() || 0;
         document.getElementById("GB_frameholder").style.height = 
             (h - capheight - footheight)+"px";
 	} else {
@@ -548,7 +553,7 @@ function chkAllNone(frmid, arr, mark, skip) {
 }
 
 var tinyMCEPreInit = {base: staticroot+"/tinymce4"};
-function initeditor(edmode,edids,css,inline,setupfunction){
+function initeditor(edmode,edids,css,inline,setupfunction,extendsetup){
 	var cssmode = css || 0;
 	var inlinemode = inline || 0;
 	var selectorstr = '';
@@ -639,6 +644,9 @@ function initeditor(edmode,edids,css,inline,setupfunction){
 	if (setupfunction) {
 		edsetup.setup = setupfunction;
 	}
+    if (extendsetup) {
+        edsetup = Object.assign(edsetup, extendsetup);
+    }
 	//for (var i in tinymce.editors) {
 	//	tinymce.editors[i].remove();
 	//}
@@ -780,14 +788,14 @@ function togglevideoembed() {
 	if (els.length>0) {
 		if (els.css('display')=='none') {
 			els.show();
-			els.parent('.fluid-width-video-wrapper').show();
+			els.closest('.video-wrapper-wrapper').show();
 			jQuery(this).text(' [-]')
 				.attr('title',_("Hide video"))
 				.attr('aria-label',_("Hide embedded video"));
 		} else {
 			els.hide();
 			els.get(0).contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');
-			els.parent('.fluid-width-video-wrapper').hide();
+			els.closest('.video-wrapper-wrapper').hide();
 			jQuery(this).text(' [+]');
 			jQuery(this).attr('title',_("Watch video here"));
 			jQuery(this).attr('aria-label',_("Embed video") + ' ' + jQuery(this).prev().text());
@@ -807,7 +815,7 @@ function togglevideoembed() {
         if ($this.closest('.itemhdr').length == 0) {
             viframe.insertAfter($this);
             $this.parent().fitVids();
-            jQuery('<br/>').insertAfter($this);
+            //jQuery('<br/>').insertAfter($this);
         } else {
             var par = $this.closest('.itemhdr').next();
             par.prepend(viframe);
@@ -899,7 +907,7 @@ function setuppreviewembeds(i,el) {
 			title: _("Preview file"),
 			"aria-label": _("Preview file"),
 			id: 'fileembedbtn'+fileembedcounter,
-			click: togglefileembed,
+			click: function() {togglefileembed(this.id);},
 			keydown: function (e) {if (e.which == 13) { $(this).click();}},
 			tabindex: 0,
 			"class": "videoembedbtn"
@@ -920,23 +928,27 @@ function supportsPdf() {
 	return false;
 }
 
-function togglefileembed() {
-	var id = this.id.substr(12);
+function togglefileembed(id, newstate) {
 	var els = jQuery('#fileiframe'+id);
+    var toggleel = jQuery('#'+id);
 	if (els.length>0) {
 		if (els.css('display')=='none') {
+            if (newstate === false) {return;} // keep closed
 			els.show();
-			jQuery(this).text(' [-]');
-			jQuery(this).attr('title',_("Hide preview"));
-			jQuery(this).attr('aria-label',_("Hide file preview"));
+			toggleel.text(' [-]');
+			toggleel.attr('title',_("Hide preview"));
+			toggleel.attr('aria-label',_("Hide file preview"));
 		} else {
+            if (newstate === true) {return;} // keep open
 			els.hide();
-			jQuery(this).text(' [+]');
-			jQuery(this).attr('title',_("Preview file"));
-			jQuery(this).attr('aria-label',_("Preview file"));
+			toggleel.text(' [+]');
+			toggleel.attr('title',_("Preview file"));
+			toggleel.attr('aria-label',_("Preview file"));
 		}
-	} else {
-		var href = jQuery(this).prev().attr('href');
+	} else if (newstate === false) {
+      return; // want closed; already is  
+    } else {
+		var href = toggleel.prev().attr('href');
 		if (href.match(/\.(doc|docx|pdf|xls|xlsx|ppt|pptx)($|\?)/i)) {
 			var src;
 			if (href.match(/\.pdf/) && supportsPdf()) {
@@ -953,12 +965,12 @@ function togglefileembed() {
 				src: src,
 				frameborder: 0,
 				allowfullscreen: 1
-			}).insertAfter(jQuery(this));
+			}).insertAfter(toggleel);
 		} else if (href.match(/\.(heic)($|\?)/i)) {
 			jQuery('<div>', {
 				id: 'fileiframe' + id,
 				text: 'Converting HEIC file (this may take a while)...'
-			}).insertAfter(jQuery(this));
+			}).insertAfter(toggleel);
 			if (!window.heic2any) {
 				jQuery.getScript(staticroot+'/javascript/heic2any.min.js')
 				 .done(function() { convertheic(href, 'fileiframe' + id); });
@@ -970,14 +982,14 @@ function togglefileembed() {
 					id: 'fileiframe'+id,
 					src: href
 				}).css('display','block').on('click', rotateimg)
-		  ).insertAfter(jQuery(this));
+		  ).insertAfter(toggleel);
 		}
-		jQuery('<br/>').insertAfter(jQuery(this));
-		jQuery(this).text(' [-]');
-		jQuery(this).attr('title',_("Hide preview"));
-		if (jQuery(this).prev().attr("data-base")) {
-			var inf = jQuery(this).prev().attr('data-base').split('-');
-			recclick(inf[0], inf[1], href, jQuery(this).prev().text());
+		jQuery('<br/>').insertAfter(toggleel);
+		toggleel.text(' [-]');
+		toggleel.attr('title',_("Hide preview"));
+		if (toggleel.prev().attr("data-base")) {
+			var inf = toggleel.prev().attr('data-base').split('-');
+			recclick(inf[0], inf[1], href, toggleel.prev().text());
 		}
 	}
 }
@@ -1191,9 +1203,26 @@ function initlinkmarkup(base) {
 	setIframeSpinner(base);
     setupToggler(base);
 	setupToggler2(base);
+    setupPopuplinks(base);
+    //setupToggleResize(base);
 	$(base).fitVids();
     resizeResponsiveIframes(base, true);
 }
+
+/* seems to be crashing browser for some reason
+function setupToggleResize(base) {
+    $(base).find("details").on("toggle", function() {
+        $(this).find("iframe").each(function(i,el) {
+            console.log(el);
+            sendResizeToIframe(el);
+        })
+        
+    })
+}
+function sendResizeToIframe(el) {
+    el.contentWindow.postMessage('requestResize','*');
+}
+*/
 
 function setIframeSpinner(base) {
     jQuery(base).find('iframe').each(function(i,el) {
@@ -1358,6 +1387,26 @@ function setupToggler2(base) {
 		});
 	});
 }
+function setupPopuplinks(base) {
+    var allowedprops = ['popup','width','innerWidth','height','innerHeight','left','screenX','top','screenY'];
+	$(base).find("a[data-popup]").each(function(i,el) {
+		if (!el.id) { el.id = 'link' + Math.random().toString(16).slice(2); }
+        $(el).off("click.popup").on("click.popup", function(e) {
+            e.preventDefault();
+            var attr = el.getAttribute('data-popup').split(/,/);
+            var attrout = [];
+            for (let i=0;i < attr.length; i++) {
+                let pts = attr[i].split(/=/);
+                if (pts.length == 2 && allowedprops.includes(pts[0])) {
+                    attrout.push(pts[0] + '=' + parseInt(pts[1]));
+                }
+            }
+            console.log(attrout.join(','));
+            window.open(el.href, 'popup_'+el.id, attrout.join(','));
+            return false;
+        });
+    });
+}
 
 //generic grouping block toggle
 function groupToggleAll(dir) {
@@ -1406,18 +1455,22 @@ function initFileAlt(el) {
 		.on("blur.filealt", function(e) { jQuery(e.target).removeClass("has-focus");} )
 		.on("click.filealt", function(e) { label.html(origLabel); } )
 		.on("change.filealt", function(e) {
-			var fileName = '';
-			fileName = e.target.value.split(/(\\|\/)/g).pop();
-			if (fileName) {
-				var maxFileSize = 10000*1024; // 10MB
-        if (this.files[0].size > maxFileSize) {
-          alert(_('This file is too large - maximum size is 10MB'));
-          $(this).val('');
-        } else {
-					label.html(fileName);
-				}
-			}
-		});
+            label.html(_('Preparing file...'));
+            doImageUploadResize(this,function(el) {
+                var fileName = '';
+                fileName = el.value.split(/(\\|\/)/g).pop();
+                if (fileName) {
+                    var maxFileSize = 10000*1024; // 10MB
+                    if (el.files[0].size > maxFileSize) {
+                        alert(_('This file is too large - maximum size is 10MB'));
+                        $(el).val('');
+                        label.html('');
+                    } else {
+                        label.html(fileName);
+                    }
+                }
+            });
+        });
 }
 jQuery('input.filealt').each(function(i,el) { initFileAlt(el);});
 
@@ -1530,18 +1583,16 @@ jQuery(document).ready(function($) {
 var sagecellcounter = 0;
 function initSageCell(base) {
 	jQuery(base).find(".converttosagecell:visible:not(.inited)").each(function() {
-		var ta, code;
+		var ta, inp, code;
 		var $this = jQuery(this);
 		if ($this.is("pre")) {
 			ta = this;
-            code = jQuery(ta).html().replace(/<br\s*\/?>/g,"\n").replace(/<\/?[a-zA-Z][^>]*>/g,'')
-                    .replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+            code = jQuery(ta).html();
 		} else {
 			ta = $this.find("textarea");
 			if (ta.length==0 || jQuery(ta[0]).val()=="") {
 				if ($this.find("pre").length>0) {
-                    code = $this.find("pre").html().replace(/<br\s*\/?>/g,"\n").replace(/<\/?[a-zA-Z][^>]*>/g,'').replace(/\n\n/g,"\n")
-                            .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+                    code = $this.find("pre").html();
 					if (ta.length==0) {
 						ta = $this.find("pre")[0];
 					} else {
@@ -1551,11 +1602,13 @@ function initSageCell(base) {
 					return false;
 				}
 			} else {
-				code = jQuery(ta[0]).val().replace(/<br\s*\/?>/g,"\n").replace(/<\/?[a-zA-Z][^>]*>/g,'').replace(/\n\n/g,"\n")
-                    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+				code = jQuery(ta[0]).val();
 				ta = ta[0];
 			}
+			inp = $this.find("input[id^=qn]");
 		}
+        code = code.replace(/<br\s*\/?>/g,"\n").replace(/<\/?[a-zA-Z][^>]*>/g,'').replace(/\n\n/g,"\n")
+                    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&amp;/g,'&');
 		if (m = code.match(/^\s+/)) {
 			var chop = m[0].length;
 			var re = new RegExp('\\n\\s{'+chop+'}',"g");
@@ -1565,12 +1618,18 @@ function initSageCell(base) {
 		sagecellcounter++;
 		var url = imasroot+'/assessment/libs/sagecellframe.html?frame_id='+frame_id;
 		url += '&code='+encodeURIComponent(code);
-        if ($this[0].hasAttribute('data-lang')) {
-            url += '&lang='+encodeURIComponent($this.attr('data-lang'));
-        }
+        ['lang', 'hide', 'autoeval'].forEach(function(dattribute) {
+            if ($this[0].hasAttribute('data-'+dattribute)) {
+                url += '&' + dattribute + '=' + encodeURIComponent($this.attr('data-'+dattribute));
+            }
+        });
 		var returnid = null;
 		if (typeof jQuery(ta).attr("id") != "undefined") {
-				url += '&update_id='+jQuery(ta).attr("id");
+			url += '&update_id='+jQuery(ta).attr("id");
+		}
+		if (inp !== null) {
+			url += '&update_out='+jQuery(inp).attr("id");
+			jQuery(inp).addClass("allowupdate").hide();
 		}
 		url += '&evallabel=' + encodeURIComponent(_('Evaluate'));
         $this.addClass("inited");
@@ -1617,7 +1676,8 @@ function setActiveTab(el) {
   var backdrop = '.dropdown-backdrop'
   var toggle   = '[data-toggle="dropdown"]'
   var Dropdown = function (element) {
-    $(element).on('click.bs.dropdown', this.toggle)
+    $(element).on('click.bs.dropdown', this.toggle);
+    $(element).next('.dropdown-menu').children("li").attr("role","menuitem");
   }
 
     Dropdown.VERSION = '3.4.1'
@@ -1678,6 +1738,8 @@ function setActiveTab(el) {
       $parent.trigger(e = $.Event('show.bs.dropdown', relatedTarget))
 
       if (e.isDefaultPrevented()) return
+
+      $this.next('.dropdown-menu').children("li").attr("role","menuitem");
 
       $this
         .trigger('focus')
@@ -1766,3 +1828,62 @@ function setActiveTab(el) {
     .on('keydown.bs.dropdown.data-api', '.dropdown-menu', Dropdown.prototype.keydown)
 
 }(jQuery);
+
+// from https://gist.github.com/dragermrb/6d4b7fda5f183524d0ebe4b0a7d8635c#file-jquery-image-upload-resizer-js
+
+function doImageUploadResize(el, callback) {
+    const that = el; // input node
+    const originalFile = el.files[0];
+
+    if (!originalFile || !originalFile.type.startsWith('image')) {
+        callback(el);
+        return;
+    }
+
+    var reader = new FileReader();
+
+    reader.onload = function (e) {
+        var img = document.createElement('img');
+        var canvas = document.createElement('canvas');
+
+        img.src = e.target.result
+        img.onload = function () {
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            var width = img.width;
+            var height = img.height;
+            var prefix = '';
+            if (img.width > 1000 || img.height > 1000) {
+                const ratio = Math.min(1000 / img.width, 1000 / img.height);
+                width = Math.round(img.width * ratio);
+                height = Math.round(img.height * ratio);
+                prefix = 'resized_';
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(function (blob) {
+                var resizedFile = new File([blob], prefix+originalFile.name.replace(/\.\w+$/,'.jpg'), originalFile);
+
+                var dataTransfer = new DataTransfer();
+                dataTransfer.items.add(resizedFile);
+
+                // temporary remove event listener, change and restore
+                var currentOnChange = that.onchange;
+
+                that.onchange = null;
+                that.files = dataTransfer.files;
+                that.onchange = currentOnChange;
+                if (typeof callback === 'function') {
+                    callback(that);
+                }
+            }, 'image/jpeg', .95);
+        }
+    }
+    reader.readAsDataURL(originalFile);
+}

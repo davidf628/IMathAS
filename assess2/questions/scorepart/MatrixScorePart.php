@@ -2,9 +2,9 @@
 
 namespace IMathAS\assess2\questions\scorepart;
 
-require_once(__DIR__ . '/ScorePart.php');
-require_once(__DIR__ . '/../models/ScorePartResult.php');
-require_once(__DIR__ . '/matrix_common.php');
+require_once __DIR__ . '/ScorePart.php';
+require_once __DIR__ . '/../models/ScorePartResult.php';
+require_once __DIR__ . '/matrix_common.php';
 
 use IMathAS\assess2\questions\models\ScorePartResult;
 use IMathAS\assess2\questions\models\ScoreQuestionParams;
@@ -57,6 +57,7 @@ class MatrixScorePart implements ScorePart
         } else if (!empty($answersize)) {
             $sizeparts = explode(',',$answersize);
             $N = $sizeparts[0];
+            $stuN = $sizeparts[0];
             if ($isRescore) {
               $givenanslist = explode('|', $givenans);
             } else {
@@ -66,17 +67,12 @@ class MatrixScorePart implements ScorePart
             }
             $scorePartResult->setLastAnswerAsGiven(implode("|",$givenanslist));
         } else {
-            $givenans = preg_replace('/\)\s*,\s*\(/','),(',$givenans);
+            //$givenans = preg_replace('/\)\s*,\s*\(/','),(',$givenans);
             $scorePartResult->setLastAnswerAsGiven($givenans);
-            $givenanslist = explode(",",preg_replace('/[^\d,\.\-]/','',$givenans));
-            $N = substr_count($answer,'),(')+1;
-            if ($N != substr_count($givenans, '),(') + 1) {
-              $scorePartResult->setRawScore(0);
-              return $scorePartResult;
-            }
+            //$givenanslist = explode(",",preg_replace('/[^\d,\.\-]/','',$givenans));
+            list($givenanslist, $stuN) = parseMatrixToArray($givenans);
         }
-        $answer = preg_replace('/\)\s*,\s*\(/','),(',$answer);
-
+        
         //handle nosolninf case
         if ($givenans==='oo' || $givenans==='DNE') {
             if ($answer==$givenans) {
@@ -96,6 +92,8 @@ class MatrixScorePart implements ScorePart
                 $fullmatrix = false;
             }
         }
+        /*
+        $answer = preg_replace('/\)\s*,\s*\(/','),(',$answer);
         if (strlen($answer)>1 && $answer[1] != '(') {
             $ansr = substr($answer,1,-1);
         } else {
@@ -103,6 +101,14 @@ class MatrixScorePart implements ScorePart
         }
         $ansr = preg_replace('/\)\s*\,\s*\(/',',',$ansr);
         $answerlist = explode(',',$ansr);
+        */
+        list($answerlist, $N) = parseMatrixToArray($answer);
+
+        if ($stuN != $N) {
+            $scorePartResult->setRawScore(0);
+            return $scorePartResult;
+        }
+
 
         if (count($answerlist) != count($givenanslist) || $answerlist[0]==='' || $givenanslist[0]==='') {
             $scorePartResult->setRawScore(0);
@@ -110,7 +116,14 @@ class MatrixScorePart implements ScorePart
         }
         foreach ($answerlist as $k=>$v) {
             $v = evalMathParser($v);
-            $answerlist[$k] = preg_replace('/[^\d\.,\-E]/','',$v);
+            if (is_nan($v)) {
+                if (isset($GLOBALS['teacherid'])) {
+                    echo _('Debug info: invalid $answer');
+                }
+                $answerlist[$k] = 0;
+            } else {
+                $answerlist[$k] = preg_replace('/[^\d\.,\-E]/','',$v);
+            }
         }
 
         if ($fullmatrix && in_array('scalarmult',$ansformats)) {
@@ -132,25 +145,27 @@ class MatrixScorePart implements ScorePart
             }
         }
 
-        if ($fullmatrix && in_array('ref',$ansformats)) {
+        if ($fullmatrix && (in_array('ref',$ansformats) || in_array('rowequiv',$ansformats))) {
           // reduce correct answer to rref
           $answerlist = matrix_scorer_rref($answerlist, $N);
           $M = count($answerlist) / $N;
-          for ($r=0;$r<$N;$r++) {
-            $c = 0;
-            while ($c < $M && abs($answerlist[$r*$M+$c]) < 1e-10) {
-              if (abs($givenanslist[$r*$M+$c]) > 1e-10) {
-                $correct = false; // nonzero where 0 expected
-              }
-              $c++;
+          if (in_array('ref',$ansformats)) {
+            for ($r=0;$r<$N;$r++) {
+                $c = 0;
+                while ($c < $M && abs($answerlist[$r*$M+$c]) < 1e-10) {
+                if (abs($givenanslist[$r*$M+$c]) > 1e-10) {
+                    $correct = false; // nonzero where 0 expected
+                }
+                $c++;
+                }
+                /* Removed: Not all ref defs include leading 1's
+                if ($c < $M) { // if there's a first non-zero entry, should be 1
+                if (abs($givenanslist[$r*$M+$c] - 1) > 1e-10) {
+                    $correct = false;
+                }
+                }
+                */
             }
-            /* Removed: Not all ref defs include leading 1's
-            if ($c < $M) { // if there's a first non-zero entry, should be 1
-              if (abs($givenanslist[$r*$M+$c] - 1) > 1e-10) {
-                $correct = false;
-              }
-            }
-            */
           }
           // now reduce given answer to rref
           if ($correct) {

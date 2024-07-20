@@ -2,9 +2,9 @@
 
 namespace IMathAS\assess2\questions;
 
-require_once(__DIR__ . '/answerboxes/AnswerBoxParams.php');
-require_once(__DIR__ . '/answerboxes/AnswerBoxFactory.php');
-require_once(__DIR__ . '/models/Question.php');
+require_once __DIR__ . '/answerboxes/AnswerBoxParams.php';
+require_once __DIR__ . '/answerboxes/AnswerBoxFactory.php';
+require_once __DIR__ . '/models/Question.php';
 
 use PDO;
 
@@ -162,6 +162,20 @@ class QuestionHtmlGenerator
                 $doShowAnswer = true;
             }
         }
+        $stulastentry = null;
+        if (isset($stuanswers[$thisq])) {
+            $stulastentry = $stuanswers[$thisq];
+        }
+        if (isset($autosaves[$thisq])) {
+            if (is_array($autosaves[$thisq])) {
+              foreach ($autosaves[$thisq] as $iidx=>$kidx) {
+                $stulastentry[$iidx] = $kidx;
+              }
+            } else {
+                $stulastentry = $autosaves[$thisq];
+            }
+        }
+
         if ($quesData['qtype'] == "multipart") {
             // if multipart only has one part, need to re-array scoreiscorrect
             if (isset($scoreiscorrect[$thisq]) && !is_array($scoreiscorrect[$thisq])) {
@@ -206,9 +220,10 @@ class QuestionHtmlGenerator
         // In older questions, code is broken up into three parts.
         // In "modern" questions, the last two parts are empty.
         try {
-          eval(interpret('control', $quesData['qtype'], $quesData['control']));
-          eval(interpret('qcontrol', $quesData['qtype'], $quesData['qcontrol']));
-          eval(interpret('answer', $quesData['qtype'], $quesData['answer']));
+          $db_qsetid = $this->questionParams->getDbQuestionSetId();
+          eval(interpret('control', $quesData['qtype'], $quesData['control'], 1, [$db_qsetid]));
+          eval(interpret('qcontrol', $quesData['qtype'], $quesData['qcontrol'], 1, [$db_qsetid]));
+          eval(interpret('answer', $quesData['qtype'], $quesData['answer'], 1, [$db_qsetid]));
         } catch (\Throwable $t) {
           $errsource = basename($t->getFile());
           if (strpos($errsource, 'QuestionHtmlGenerator.php') !== false) {
@@ -286,11 +301,11 @@ class QuestionHtmlGenerator
             if (isset($displayformat)) {
                 if (is_array($displayformat)) {
                     foreach ($displayformat as $kidx => $iidx) {
-                        if ($iidx == 'select') {
+                        if ($iidx == 'select' || preg_match('/\dcolumn/', $iidx)) {
                             unset($displayformat[$kidx]);
                         }
                     }
-                } else if ($displayformat == 'select') {
+                } else if ($displayformat == 'select' || preg_match('/\dcolumn/', $displayformat)) {
                     unset($displayformat);
                 }
             }
@@ -325,7 +340,7 @@ class QuestionHtmlGenerator
         }
 
         if (isset($GLOBALS['CFG']['hooks']['assess2/questions/question_html_generator'])) {
-            require_once($GLOBALS['CFG']['hooks']['assess2/questions/question_html_generator']);
+            require_once $GLOBALS['CFG']['hooks']['assess2/questions/question_html_generator'];
             if (isset($onBeforeAnswerBoxGenerator) && is_callable($onBeforeAnswerBoxGenerator)) {
                 $onBeforeAnswerBoxGenerator();
             }
@@ -369,6 +384,7 @@ class QuestionHtmlGenerator
                             return evalbasic($v);
                         }
                     }, $answeights);
+                    ksort($answeights);
                 } else {
                     if (count($anstypes)>1) {
                         $answeights = array_fill_keys(array_keys($anstypes), 1);
@@ -626,55 +642,10 @@ class QuestionHtmlGenerator
 
         $answerbox = $this->adjustPreviewLocation($answerbox, $toevalqtxt, $previewloc);
 
-        /*
-         * Possibly adjust the showanswer if it doesn't look right
-         */
-        $doShowDetailedSoln = false;
-        if (isset($showanswer) && is_array($showanswer) && is_array($answerbox) && count($showanswer) < count($answerbox)) {
-            $showansboxloccnt = substr_count($toevalqtxt,'$showanswerloc') + substr_count($toevalqtxt,'[SAB');
-            if ($showansboxloccnt > 0 && count($answerbox) > $showansboxloccnt && count($showanswer) == $showansboxloccnt) {
-                // not enough showanswerloc boxes for all the parts.  
-                /*
-                  This approach combined to a single showanswer
-                $questionWriterVars['showanswer'] = implode('<br>', $showanswer);
-                $toevalqtxt = preg_replace('/(\$showanswerloc\[.*?\]|\[SAB.*?\])(\s*<br\/><br\/>)?/','', $toevalqtxt);
-                */
-                // this approach will only show the manually placed boxes, and only show them after all 
-                // preceedingly-indexed parts have been cleared for answer showing.
-                ksort($showanswer);
-                $_lastPartUsed = -1;
-                $_thisIsReady = true;
-                $doShowDetailedSoln = true;
-                foreach ($showanswer as $kidx=>$atIdx) {
-                    $_thisIsReady = true;
-                    for ($iidx=$_lastPartUsed+1; $iidx <= $kidx; $iidx++) {
-                        if (empty($doShowAnswerParts[$iidx]) && !$doShowAnswer) {
-                            $_thisIsReady = false;
-                            $doShowDetailedSoln = false;
-                            for ($siidx=$iidx; $siidx < $kidx; $siidx++) {
-                                $doShowAnswerParts[$siidx] = false;
-                            }
-                            break;
-                        } else if ($iidx < $kidx) {
-                            $doShowAnswerParts[$iidx] = false;
-                        }
-                    }
-                    $doShowAnswerParts[$kidx] = $_thisIsReady;
-                    $_lastPartUsed = $kidx;
-                }
-                $doShowAnswer = false; // disable automatic display of answers
-            }
-        }
-
-        /*
-         * Get the "Show Answer" button location.
-         */
-
-        // This variable must be named $showanswerloc, as it may be used by
-        // the question writer.
-        $showanswerloc = $this->getShowAnswerLocation($doShowAnswer, $doShowAnswerParts,
-          $answerbox, $entryTips, $displayedAnswersForParts, $questionWriterVars,
-          $anstypes ?? $quesData['qtype']);
+        // replace $showanswerloc[n] with [SABn] for later processing after eval
+        $toevalqtxt = preg_replace('/\$showanswerloc\[(.*?)\]/','[SAB$1]', $toevalqtxt);
+        // same with single $showanswerloc
+        $toevalqtxt = str_replace('$showanswerloc', '[SAB]', $toevalqtxt);
 
         // incorporate $showanswer.  Really this should be done prior to the last line,
         // and remove the redundant logic from that function, but I don't want to refactor 
@@ -718,6 +689,56 @@ class QuestionHtmlGenerator
           $evaledsoln = '';
         }
         $detailedSolutionContent = $this->getDetailedSolutionContent($evaledsoln);
+
+        /*
+         * Possibly adjust the showanswer if it doesn't look right
+         */
+        $doShowDetailedSoln = false;
+        if (isset($showanswer) && is_array($showanswer) && is_array($answerbox) && count($showanswer) < count($answerbox)) {
+            $showansboxloccnt = substr_count($evaledqtext,'$showanswerloc') + substr_count($evaledqtext,'[SAB');
+            if ($showansboxloccnt > 0 && count($answerbox) > $showansboxloccnt && count($showanswer) == $showansboxloccnt) {
+                // not enough showanswerloc boxes for all the parts.  
+                /*
+                  This approach combined to a single showanswer
+                $questionWriterVars['showanswer'] = implode('<br>', $showanswer);
+                $toevalqtxt = preg_replace('/(\$showanswerloc\[.*?\]|\[SAB.*?\])(\s*<br\/><br\/>)?/','', $toevalqtxt);
+                */
+                // this approach will only show the manually placed boxes, and only show them after all 
+                // preceedingly-indexed parts have been cleared for answer showing.
+                ksort($showanswer);
+                $_lastPartUsed = -1;
+                $_thisIsReady = true;
+                $doShowDetailedSoln = true;
+                foreach ($showanswer as $kidx=>$atIdx) {
+                    $_thisIsReady = true;
+                    for ($iidx=$_lastPartUsed+1; $iidx <= $kidx; $iidx++) {
+                        if (empty($doShowAnswerParts[$iidx]) && !$doShowAnswer) {
+                            $_thisIsReady = false;
+                            $doShowDetailedSoln = false;
+                            for ($siidx=$iidx; $siidx < $kidx; $siidx++) {
+                                $doShowAnswerParts[$siidx] = false;
+                            }
+                            break;
+                        } else if ($iidx < $kidx) {
+                            $doShowAnswerParts[$iidx] = false;
+                        }
+                    }
+                    $doShowAnswerParts[$kidx] = $_thisIsReady;
+                    $_lastPartUsed = $kidx;
+                }
+                $doShowAnswer = false; // disable automatic display of answers
+            }
+        }
+
+        /*
+         * Get the "Show Answer" button location.
+         */
+
+        // This variable must be named $showanswerloc, as it may be used by
+        // the question writer.
+        $showanswerloc = $this->getShowAnswerLocation($doShowAnswer, $doShowAnswerParts,
+          $answerbox, $entryTips, $displayedAnswersForParts, $questionWriterVars,
+          $anstypes ?? $quesData['qtype']);
 
         /*
          * Special answer box stuff.
@@ -845,11 +866,15 @@ class QuestionHtmlGenerator
           $sadiv .= '<div>'.$showanswerloc.'</div>';
         } else if (is_array($showanswerloc)) {
           foreach ($showanswerloc as $iidx => $saloc) {
-            if (($doShowAnswer || (is_array($doShowAnswerParts) && !empty($doShowAnswerParts[$iidx]))) &&
+            // show part solution if $doShowAnswerParts for that part is enabled,
+            // or if $doShowAnswer is set and $doShowAnswerParts isn't explicitly disabled
+            if ((($doShowAnswer && (!isset($doShowAnswerParts[$iidx]) || $doShowAnswerParts[$iidx])) || 
+                (is_array($doShowAnswerParts) && !empty($doShowAnswerParts[$iidx]))
+              ) &&
               strpos($toevalqtxt,'$showanswerloc['.$iidx.']')===false
             ) {
               $sadiv .= '<div>'.$saloc.'</div>';
-            }
+            } 
           }
         }
         // display detailed solution, if allowed and set

@@ -1,4 +1,6 @@
 <?php
+
+// Function to show calendar, used by showcalendar and courseshowitems
 $cid = Sanitize::courseId($_GET['cid']);
 
 
@@ -11,7 +13,7 @@ if (isset($_GET['callength'])) {
 	$_COOKIE["callength".$cid] = Sanitize::onlyInt($_GET['callength']);
 }
 
-require_once("filehandler.php");
+require_once "filehandler.php";
 
 function showcalendar($refpage) {
 global $DBH;
@@ -230,7 +232,7 @@ while ($row = $stm->fetch(PDO::FETCH_ASSOC)) {
 			 }
 			 if ($row['reqscoretype']&2) { //using percent-based
 				 if ($reqscoreptsposs==-1) {
-					 require("../includes/updateptsposs.php");
+					 require_once "../includes/updateptsposs.php";
 					 $reqscoreptsposs = updatePointsPossible($row['reqscoreaid']);
 				 }
 				 if (round(100*$reqascore/$reqscoreptsposs,1)+.02<abs($row['reqscore'])) {
@@ -573,9 +575,9 @@ while ($row = $stm->fetch(PDO::FETCH_NUM)) {
 }
 
 if ($editingon) {
-    $query = "SELECT id,name,postby,replyby,startdate,enddate,caltag,allowlate FROM imas_forums WHERE enddate>$exlowertime AND avail>0 AND courseid=:courseid ORDER BY name";
+    $query = "SELECT id,name,postby,replyby,startdate,enddate,caltag,allowlate FROM imas_forums WHERE (enddate>$exlowertime OR avail=2) AND avail>0 AND courseid=:courseid ORDER BY name";
 } else {
-    $query = "SELECT id,name,postby,replyby,startdate,enddate,caltag,allowlate FROM imas_forums WHERE enddate>$exlowertime AND ((postby>$exlowertime AND postby<$uppertime) OR (replyby>$exlowertime AND replyby<$uppertime)) AND avail>0 AND courseid=:courseid ORDER BY name";
+    $query = "SELECT id,name,postby,replyby,startdate,enddate,caltag,allowlate FROM imas_forums WHERE (enddate>$exlowertime OR avail=2) AND ((postby>$exlowertime AND postby<$uppertime) OR (replyby>$exlowertime AND replyby<$uppertime)) AND avail>0 AND courseid=:courseid ORDER BY name";
 }
 $stm = $DBH->prepare($query); //times were calcualated in flow - safe
 $stm->execute(array(':courseid'=>$cid));
@@ -712,7 +714,7 @@ foreach ($itemsimporder as $item) {
 				$assess[$moday][$k] = $byid['A'.$datetype.$itemsassoc[$item][1]][3];
 				$names[$k] = $byid['A'.$datetype.$itemsassoc[$item][1]][4];
 				//if (($greyitems[$item]&$byid['A'.$datetype.$itemsassoc[$item][1]][5])>0 && !isset($teacherid)) {
-				if ($byid['A'.$datetype.$itemsassoc[$item][1]][5]>0 && !isset($teacherid)) {  //hide link and grey if not current
+				if (($byid['A'.$datetype.$itemsassoc[$item][1]][5]>0 && !isset($teacherid)) || isset($hiddenitems[$item])) {  //hide link and grey if not current
 					$colors[$k] = '#ccc';
 					$assess[$moday][$k]['color'] = '#ccc';
 				}
@@ -735,7 +737,7 @@ foreach ($itemsimporder as $item) {
 				$colors[$k] = $byid['F'.$datetype.$itemsassoc[$item][1]][2];
 				$assess[$moday][$k] = $byid['F'.$datetype.$itemsassoc[$item][1]][3];
 				$names[$k] = $byid['F'.$datetype.$itemsassoc[$item][1]][4];
-				if ($byid['F'.$datetype.$itemsassoc[$item][1]][5]>0 && !isset($teacherid)) {
+				if (($byid['F'.$datetype.$itemsassoc[$item][1]][5]>0 && !isset($teacherid)) || isset($hiddenitems[$item])) {
 					$colors[$k] = '#ccc';
                     $assess[$moday][$k]['color'] = '#ccc';
 				}
@@ -761,7 +763,10 @@ foreach ($itemsimporder as $item) {
 					$colors[$k] = '#ccc';
 					$assess[$moday][$k]['color'] = '#ccc';
 					unset($assess[$moday][$k]['id']);
-				}
+				} else if (isset($hiddenitems[$item])) {
+                    $colors[$k] = '#ccc';
+					$assess[$moday][$k]['color'] = '#ccc';
+                }
 				$k++;
 			}
 		}
@@ -781,7 +786,10 @@ foreach ($itemsimporder as $item) {
 					$colors[$k] = '#ccc';
 					$assess[$moday][$k]['color'] = '#ccc';
 					unset($assess[$moday][$k]['id']);
-				}
+				} else if (isset($hiddenitems[$item])) {
+                    $colors[$k] = '#ccc';
+					$assess[$moday][$k]['color'] = '#ccc';
+                }
 				$k++;
 			}
 		}
@@ -801,7 +809,10 @@ foreach ($itemsimporder as $item) {
 					$colors[$k] = '#ccc';
 					$assess[$moday][$k]['color'] = '#ccc';
 					unset($assess[$moday][$k]['id']);
-				}
+				} else if (isset($hiddenitems[$item])) {
+                    $colors[$k] = '#ccc';
+					$assess[$moday][$k]['color'] = '#ccc';
+                }
 				$k++;
 			}
 		}
@@ -954,11 +965,11 @@ function flattenitems($items,&$addto,&$folderholder,&$hiddenholder,&$greyitems,$
 function addBlockItems($items, $parent, &$tags,&$colors,&$assess,&$names,&$itemidref) {
 	foreach ($items as $i=>$item) {
 		if (is_array($item)) {
-			if ($item['startdate'] > 0) {
+			if ($item['avail'] == 1 && $item['startdate'] > 0) {
 				$moday = tzdate('Y-n-j',$item['startdate']);
 				$json = array(
 					"type"=>"BS",
-					"typeref"=>'BS'.$item['id'].';'.$parent.'-'.$i,
+					"typeref"=>'BS'.$item['id'].':'.$parent.'-'.$i,
 					"tag"=>"B",
 					"name"=> $item['name']
 				);
@@ -967,13 +978,13 @@ function addBlockItems($items, $parent, &$tags,&$colors,&$assess,&$names,&$itemi
 				$colors[$k] = '';
 				$assess[$moday][$k] = $json;
 				$names[$k] = $item['name'];
-				$itemidref[$k] = 'BS'.$item['id'].';'.$parent.'-'.$i;
+				$itemidref[$k] = 'BS'.$item['id'].':'.$parent.'-'.$i;
 			}
-			if ($item['enddate'] < 2000000000) {
+			if ($item['avail'] == 1 && $item['enddate'] < 2000000000) {
 				$moday = tzdate('Y-n-j',$item['enddate']);
 				$json = array(
 					"type"=>"BE",
-					"typeref"=>'BE'.$item['id'].';'.$parent.'-'.$i,
+					"typeref"=>'BE'.$item['id'].':'.$parent.'-'.$i,
 					"tag"=>"B",
 					"name"=> $item['name']
 				);
@@ -982,7 +993,7 @@ function addBlockItems($items, $parent, &$tags,&$colors,&$assess,&$names,&$itemi
 				$colors[$k] = '';
 				$assess[$moday][$k] = $json;
 				$names[$k] = $item['name'];
-				$itemidref[$k] = 'BE'.$item['id'].';'.$parent.'-'.$i;
+				$itemidref[$k] = 'BE'.$item['id'].':'.$parent.'-'.$i;
 			}
 			addBlockItems($item['items'],$parent.'-'.$i, $tags,$colors,$assess,$names,$itemidref);
 		}

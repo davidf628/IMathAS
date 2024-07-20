@@ -1,9 +1,9 @@
 <?php
 
-require("../init_without_validate.php");
+require_once "../init_without_validate.php";
 $flexwidth = true;
 $nologo = true;
-require("../header.php");
+require_once "../header.php";
 
 if (empty($CFG['LTI']['autoreg'])) {
     echo "Dynamic registration is not currently enabled. Contact the system admin.";
@@ -77,7 +77,9 @@ $post = [
         "custom_parameters" => [
             "context_history" => '$Context.id.history',
             'link_end_avail_time' => '$ResourceLink.available.endDateTime',
+            'link_user_end_avail_time' => '$ResourceLink.available.user.endDateTime',
             'link_end_sub_time' => '$ResourceLink.submission.endDateTime',
+            'link_user_end_sub_time' => '$ResourceLink.submission.user.endDateTime',
             'link_history' => '$ResourceLink.id.history'
         ],
         "claims" => ["iss", "sub", "name", "given_name", "family_name"],

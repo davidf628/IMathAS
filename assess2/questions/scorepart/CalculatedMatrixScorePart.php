@@ -2,9 +2,9 @@
 
 namespace IMathAS\assess2\questions\scorepart;
 
-require_once(__DIR__ . '/ScorePart.php');
-require_once(__DIR__ . '/../models/ScorePartResult.php');
-require_once(__DIR__ . '/matrix_common.php');
+require_once __DIR__ . '/ScorePart.php';
+require_once __DIR__ . '/../models/ScorePartResult.php';
+require_once __DIR__ . '/matrix_common.php';
 
 use IMathAS\assess2\questions\models\ScorePartResult;
 use IMathAS\assess2\questions\models\ScoreQuestionParams;
@@ -84,25 +84,46 @@ class CalculatedMatrixScorePart implements ScorePart
             $scorePartResult->setLastAnswerAsGiven(implode('|',$givenanslist));
             $scorePartResult->setLastAnswerAsNumber(implode('|',$givenanslistvals));
         } else {
-            $givenans = preg_replace('/\)\s*,\s*\(/','),(', $givenans);
+            list($givenanslist, $N) = parseMatrixToArray($givenans);
+            /*$givenans = preg_replace('/\)\s*,\s*\(/','),(', $givenans);
             if (strlen($givenans)>1 && $givenans[1]!='(') {
                 $givenanslist = explode(',', str_replace('),(', ',', substr($givenans,1,-1)));
             } else {
                 $givenanslist = explode(',', str_replace('),(', ',', substr($givenans,2,-2)));
             }
+            $N = substr_count($answer,'),(')+1;
+            */
+
+            //this may not be backwards compatible
+            $scorePartResult->setLastAnswerAsGiven($givenans);
+            if ($givenanslist === false) { // invalid answer
+                $scorePartResult->setRawScore(0);
+                return $scorePartResult;
+            }
+
             if ($hasNumVal) {
                 $givenanslistvals = explode('|', $givenansval);
             } else {
+                $givenanslistvals = [];
                 foreach ($givenanslist as $j=>$v) {
                     $givenanslistvals[$j] = evalMathParser($v);
                 }
             }
-            $N = substr_count($answer,'),(')+1;
+
             //this may not be backwards compatible
-            $scorePartResult->setLastAnswerAsGiven($givenans);
             $scorePartResult->setLastAnswerAsNumber(implode('|',$givenanslistvals));
         }
+        /*
         $answer = preg_replace('/\)\s*,\s*\(/','),(',$answer);
+        if (strlen($answer)>1 && $answer[1] != '(') {
+            $ansr = substr($answer,1,-1);
+        } else {
+            $ansr = substr($answer,2,-2);
+        }
+        $ansr = preg_replace('/\)\s*\,\s*\(/',',',$ansr);
+        $answerlist = explode(',',$ansr);
+        */
+        list($answerlist, $ansN) = parseMatrixToArray($answer);
 
         //handle nosolninf case
         if ($givenans==='oo' || $givenans==='DNE') {
@@ -121,14 +142,6 @@ class CalculatedMatrixScorePart implements ScorePart
         $correct = true;
         $incorrect = array();
 
-        if (strlen($answer)>1 && $answer[1] != '(') {
-            $ansr = substr($answer,1,-1);
-        } else {
-            $ansr = substr($answer,2,-2);
-        }
-        $ansr = preg_replace('/\)\s*\,\s*\(/',',',$ansr);
-        $answerlist = explode(',',$ansr);
-
         foreach ($answerlist as $k=>$v) {
             $answerlist[$k] = evalMathParser($v);
         }
@@ -146,14 +159,16 @@ class CalculatedMatrixScorePart implements ScorePart
             }
 
         } else {
-            if (substr_count($answer,'),(')!=substr_count($givenans,'),(')) {
+            if ($N != $ansN) {
                 $correct = false;
             }
-            $tocheck = str_replace(' ','', $givenans);
+            /*$tocheck = str_replace(' ','', $givenans);
             $tocheck = str_replace(array('],[','),(','>,<'),',',$tocheck);
             $tocheck = substr($tocheck,2,-2);
             $tocheck = explode(',',$tocheck);
             foreach($tocheck as $i=>$chkme) {
+            */
+            foreach ($givenanslist as $i=>$chkme) {
                 if (!checkanswerformat($chkme,$ansformats)) {
                     //perhaps should just elim bad answer rather than all?
                     if ($scoremethod == 'byelement') {
@@ -192,25 +207,27 @@ class CalculatedMatrixScorePart implements ScorePart
             }
         }
 
-        if ($fullmatrix && in_array('ref',$ansformats)) {
+        if ($fullmatrix && (in_array('ref',$ansformats) || in_array('rowequiv',$ansformats))) {
             // reduce correct answer to rref
             $answerlist = matrix_scorer_rref($answerlist, $N);
             $M = count($answerlist) / $N;
-            for ($r=0;$r<$N;$r++) {
-              $c = 0;
-              while (abs($answerlist[$r*$M+$c]) < 1e-10 && $c < $M) {
-                if (abs($givenanslistvals[$r*$M+$c]) > 1e-10) {
-                  $correct = false; // nonzero where 0 expected
+            if (in_array('ref',$ansformats)) {
+                for ($r=0;$r<$N;$r++) {
+                $c = 0;
+                while (abs($answerlist[$r*$M+$c]) < 1e-10 && $c < $M) {
+                    if (abs($givenanslistvals[$r*$M+$c]) > 1e-10) {
+                    $correct = false; // nonzero where 0 expected
+                    }
+                    $c++;
                 }
-                $c++;
-              }
-              /* Removed: Not all ref defs include leading 1's
-              if ($c < $M) { // if there's a first non-zero entry, should be 1
-                if (abs($givenanslistvals[$r*$M+$c] - 1) > 1e-10) {
-                  $correct = false;
+                /* Removed: Not all ref defs include leading 1's
+                if ($c < $M) { // if there's a first non-zero entry, should be 1
+                    if (abs($givenanslistvals[$r*$M+$c] - 1) > 1e-10) {
+                    $correct = false;
+                    }
                 }
-              }
-              */
+                */
+                }
             }
             // now reduce given answer to rref
             if ($correct) {

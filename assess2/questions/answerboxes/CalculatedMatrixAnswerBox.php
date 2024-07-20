@@ -47,6 +47,7 @@ class CalculatedMatrixAnswerBox implements AnswerBox
         }
 
         $ansformats = array_map('trim', explode(',', $answerformat));
+        $dispformats = array_map('trim', explode(',', $displayformat));
 
         if ($multi) {$qn = ($qn + 1) * 1000 + $partnum;}
 
@@ -62,18 +63,25 @@ class CalculatedMatrixAnswerBox implements AnswerBox
             if (isset($GLOBALS['capturechoices'])) {
                 $GLOBALS['answersize'][$qn] = $answersize;
             }
-            if ($colorbox == '') {
-                $out .= '<div id="qnwrap' . $qn . '">';
+            if (in_array('inline', $dispformats)) {
+                $style = ' style="display:inline-block;vertical-align:middle"';
             } else {
-                $out .= '<div class="' . $colorbox . '" id="qnwrap' . $qn . '">';
+                $style = '';
+            }
+            if ($colorbox == '') {
+                $out .= '<div id="qnwrap' . $qn . '"' . $style . '>';
+            } else {
+                $out .= '<div class="' . $colorbox . '" id="qnwrap' . $qn . '"' . $style . '>';
             }
             $out .= '<table>';
-            if ($displayformat == 'det') {
+            if (in_array('det', $dispformats)) {
                 $out .= '<tr><td class="matrixdetleft">&nbsp;</td><td>';
             } else {
                 $out .= '<tr><td class="matrixleft">&nbsp;</td><td>';
             }
+            
             $arialabel = $this->answerBoxParams->getQuestionIdentifierString() .
+                ' ' . sprintf(_('matrix entry with %d rows and %d columns'), $answersize[0], $answersize[1]) .
                 (!empty($readerlabel) ? ' ' . Sanitize::encodeStringForDisplay($readerlabel) : '');
             $out .= '<table role="group" aria-label="' . $arialabel . '">';
             $count = 0;
@@ -96,8 +104,7 @@ class CalculatedMatrixAnswerBox implements AnswerBox
                     $params['matrixsize'] = $answersize;
 
                     $out .= '<input ' .
-                    'aria-label="' . sprintf(_('Cell %d of %d'), $count + 1, $cellcnt) . '" ' .
-                    Sanitize::generateAttributeString($attributes) .
+                        Sanitize::generateAttributeString($attributes) .
                         '" />';
 
                     $out .= "</td>\n";
@@ -106,7 +113,7 @@ class CalculatedMatrixAnswerBox implements AnswerBox
                 $out .= "</tr>";
             }
             $out .= "</table>\n";
-            if ($displayformat == 'det') {
+            if (in_array('det', $dispformats)) {
                 $out .= '</td><td class="matrixdetright">&nbsp;</td></tr></table>';
             } else {
                 $out .= '</td><td class="matrixright">&nbsp;</td></tr></table>';

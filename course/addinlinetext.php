@@ -3,10 +3,10 @@
 //(c) 2006 David Lippman
 
 /*** master php includes *******/
-require("../init.php");
-require("../includes/htmlutil.php");
-require("../includes/parsedatetime.php");
-require_once("../includes/filehandler.php");
+require_once "../init.php";
+require_once "../includes/htmlutil.php";
+require_once "../includes/parsedatetime.php";
+require_once "../includes/filehandler.php";
 
 
 
@@ -383,17 +383,17 @@ if (!(isset($teacherid))) { // loaded by a NON-teacher
 		}
 	}
 	$outcomes = array();
-	function flattenarr($ar) {
-		global $outcomes;
-		foreach ($ar as $v) {
-			if (is_array($v)) { //outcome group
-				$outcomes[] = array($v['name'], 1);
-				flattenarr($v['outcomes']);
-			} else {
-				$outcomes[] = array($v, 0);
-			}
-		}
-	}
+	function flattenarr($ar, $deftype = 0) {
+        global $outcomes;
+        foreach ($ar as $v) {
+            if (is_array($v)) { //outcome group
+                $outcomes[] = array($v['name'], 1);
+                flattenarr($v['outcomes'], 2);
+            } else {
+                $outcomes[] = array($v, $deftype);
+            }
+        }
+    }
 	flattenarr($outcomearr);
 
 	$page_formActionTag .= (isset($_GET['id'])) ? "&id=" . $gid : "";
@@ -402,7 +402,7 @@ if (!(isset($teacherid))) { // loaded by a NON-teacher
 
  /******* begin html output ********/
  $placeinhead = "<script type=\"text/javascript\" src=\"$staticroot/javascript/DatePicker.js\"></script>";
-require("../header.php");
+require_once "../header.php";
 
 if ($overwriteBody==1) {
 	echo $body;
@@ -554,5 +554,5 @@ $(function() { chghidetitle(); });
 	<p><sup>*</sup>Avoid quotes in the filename</p>
 <?php
 }
-	require("../footer.php");
+	require_once "../footer.php";
 ?>

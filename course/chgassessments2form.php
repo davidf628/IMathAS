@@ -41,8 +41,12 @@ $vueData = array(
 	'showcat' => 'DNC',
 	'samever' => 'DNC',
 	'noprint' => 'DNC',
+    'lockforassess' => 'DNC',
     'showwork' => 'DNC',
     'showworktype' => 0,
+    'doworkcutoff' => 0,
+    'workcutofftype' => 'hr',
+    'workcutoffval' => 1,
 	'allowlate' => 'DNC',
 	'timelimit' => '',
 	'allowovertime' => false,
@@ -191,7 +195,7 @@ $vueData = array(
 	 		<a href="#" onclick="groupToggleAll(0);return false;"><?php echo _('Collapse All'); ?></a>
 		</div>
 		<div class="block grouptoggle">
-			<img class="mida" src="<?php echo $staticroot;?>/img/collapse.gif" />
+			<img class="mida" src="<?php echo $staticroot;?>/img/collapse.gif" alt="Collapse" />
 			<?php echo _('Core Options'); ?>
 		</div>
 		<div class="blockitems">
@@ -365,7 +369,7 @@ $vueData = array(
 		</div>
 
 		<div class="block grouptoggle">
-			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" />
+			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" alt="Expand" />
 			<?php echo _('Additional Display Options'); ?>
 		</div>
 		<div class="blockitems hidden">
@@ -402,7 +406,22 @@ $vueData = array(
 						<option value="2"><?php echo _('After assessment');?></option>
 						<option value="3"><?php echo _('During or after assessment');?></option>
                     </select>
-                    <span v-show="showwork != 'DNC'">
+                    <span v-if="showwork != 'DNC' && showwork > 1">
+                        <br>
+                        <input type="checkbox" v-model="doworkcutoff" name="doworkcutoff" id="doworkcutoff" value="1"> 
+                        <label for="doworkcutoff"><?php echo _('Add work cutoff') . '. ';  ?></label>
+                        <span v-if="doworkcutoff">
+                            <label for="workcutoffval"><?php echo _('Work must be added within:') . ' '; ?></label>
+                            <input name="workcutoffval" id="workcutoffval" v-model="workcutoffval" style="width:5.5ch" 
+                                type="number" min="0" :max="workcutofftype=='day'?45:1000"/>
+                            <select name="workcutofftype" id="workcutofftype" v-model="workcutofftype" aria-label="<?php echo _('units for work added within time');?>">
+                                <option value="min"><?php echo _('minutes');?></option>
+                                <option value="hr"><?php echo _('hours');?></option>
+                                <option value="day"><?php echo _('days');?></option>
+                            </select>
+                        </span>
+                    </span>
+                    <span v-show="showwork != 'DNC' && showwork > 0">
                         <br>
                         <label for="showworktype"><?php echo _('Work entry type');?>:</label>
                         <select name="showworktype" id="showworktype" v-model="showworktype">
@@ -413,6 +432,19 @@ $vueData = array(
 				</span><br class=form />
 			</div>
 
+            <div :class="{highlight:lockforassess != 'DNC'}">
+				<label class=form for="lockforassess"><?php echo _('Lock student out of the rest of the course until submitted'); ?></label>
+				<span class=formright>
+					<select name="lockforassess" id="lockforassess" v-model="lockforassess">
+						<option value="DNC"><?php echo _('Do not change'); ?></option>
+						<option value="0"><?php echo _('No'); ?></option>
+						<option value="2"><?php echo _('Yes'); ?></option>
+					</select>
+                    <span class=small>
+                        <?php echo _('Only applies to Quiz-style assessments'); ?>
+                    </span>
+				</span><br class=form />
+			</div>
 			<div :class="{highlight:noprint != 'DNC'}">
 				<label class=form for="noprint"><?php echo _('Make hard to print'); ?></label>
 				<span class=formright>
@@ -456,7 +488,7 @@ $vueData = array(
 		</div>
 
 		<div class="block grouptoggle">
-			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" />
+			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" alt="Expand" />
 			<?php echo _('Time Limit and Access Control'); ?>
 		</div>
 		<div class="blockitems hidden">
@@ -556,7 +588,7 @@ $vueData = array(
 		</div>
 
 		<div class="block grouptoggle">
-			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" />
+			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" alt="Expand" />
 			<?php echo _('Help and Hints'); ?>
 		</div>
 		<div class="blockitems hidden">
@@ -654,7 +686,7 @@ $vueData = array(
 		</div>
 
 		<div class="block grouptoggle">
-			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" />
+			<img class="mida" src="<?php echo $staticroot;?>/img/expand.gif" alt="Expand" />
 			<?php echo _('Grading and Feedback'); ?>
 		</div>
 		<div class="blockitems hidden">
@@ -743,11 +775,10 @@ $vueData = array(
 	</fieldset>
 </div>
 <script type="text/javascript">
-
-var app = new Vue({
-	el: '#app',
-  data: <?php echo json_encode($vueData, JSON_INVALID_UTF8_IGNORE); ?>,
-	computed: {
+const { createApp } = Vue;
+createApp({
+  data: function() { return <?php echo json_encode($vueData, JSON_INVALID_UTF8_IGNORE); ?>;},
+  computed: {
 		coreSet: function() {
 			let tot = (this.subtype === 'DNC' ? 0 : 1) +
 				(this.defregens === '' ? 0 : 1) +
@@ -890,6 +921,10 @@ var app = new Vue({
 					'value': 'after_due',
 					'text': '<?php echo _('After the due date'); ?>'
 				},
+                {
+                    'value': 'after_lp',
+                    'text': '<?php echo _('After Latepass period');?>'
+                },
 				{
 					'value': 'immediately',
 					'text': '<?php echo _('Immediately - they can always view it'); ?>'
@@ -936,6 +971,10 @@ var app = new Vue({
 					'value': 'after_due',
 					'text': '<?php echo _('After the due date'); ?>'
 				},
+                {
+                    'value': 'after_lp',
+                    'text': '<?php echo _('After Latepass period');?>'
+                },
 				{
 					'value': 'never',
 					'text': '<?php echo _('Never'); ?>'
@@ -984,15 +1023,21 @@ var app = new Vue({
  				return [];
  			} else {
  				var out = [
- 					{
- 						'value': 'after_due',
- 						'text': '<?php echo _('After the due date'); ?>'
+                    {
+ 						'value': 'after_lp',
+ 						'text': '<?php echo _('After Latepass period');?>'
  					},
  					{
  						'value': 'never',
  						'text': '<?php echo _('Never'); ?>'
  					}
                 ];
+                if (this.viewingb !== 'after_lp' && this.scoresingb !== 'after_lp') {
+                    out.unshift({
+ 						'value': 'after_due',
+ 						'text': '<?php echo _('After the due date');?>'
+ 					});
+                }
                 if ((this.viewingb === 'after_take' || this.viewingb === 'immediately') && 
                     this.subtype == 'by_assessment'
                 ) {
@@ -1044,5 +1089,5 @@ var app = new Vue({
     	// call init method
         this.initCalTagRadio();
 	}
-});
+}).mount('#app');
 </script>

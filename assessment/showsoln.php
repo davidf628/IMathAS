@@ -1,9 +1,9 @@
 <?php
-require_once("../includes/sanitize.php");
+require_once "../includes/sanitize.php";
 
 if (!isset($_GET['cid']) || $_GET['cid']==="embedq") {
 	$_SESSION = array();
-	require("../init_without_validate.php");
+	require_once "../init_without_validate.php";
 
 	$cid = "embedq";
 	$_SESSION['secsalt'] = "12345";
@@ -15,7 +15,7 @@ if (!isset($_GET['cid']) || $_GET['cid']==="embedq") {
 	}
     $myrights = 5;
 } else {
-	require("../init.php");
+	require_once "../init.php";
 }
 
 $id = Sanitize::onlyInt($_GET['id']);
@@ -28,14 +28,17 @@ $isdiag = false;
 $useeqnhelper = false;
 $useeditor = 0;
 $isfw = false;
-require("header.php");
+$placeinhead = '<link rel="stylesheet" type="text/css" href="'.$staticroot.'/assess2/vue/css/chunk-common.css?v='.$lastvueupdate.'" />';
+$placeinhead .= '<link rel="stylesheet" type="text/css" href="' . $staticroot . '/assess2/vue/css/index.css?v=' . $lastvueupdate . '" />';
+$placeinhead .= '<link rel="stylesheet" type="text/css" href="' . $staticroot . '/assess2/print.css?v=' . $lastvueupdate . '" media="print">';
+require_once "../header.php";
 echo '<p><b style="font-size:110%">'._('Written Example').'</b> '._('of a similar problem').'</p>';
 if ($sig != md5($id.$_SESSION['secsalt'])) {
 	echo "invalid signature - not authorized to view the solution for this problem";
 	exit;
 }
 
-//require("displayq2.php");
+//require_once "displayq2.php";
 //$txt = displayq(0,$id,100000,false,false,0,2+$t);
 //echo printfilter(filter($txt));
 
@@ -68,13 +71,16 @@ $a2->setState($state);
 $disp = $a2->displayQuestion($qn, [
     'showallparts' => true,
     'showans' => false,
-    'showhints' => 0
+    'hideans' => true,
+    'showhints' => 0,
+    'includeans' => true
 ]);
-if ($showq) {
-    echo printfilter(filter($disp['html']));
-}
-echo printfilter(filter($disp['soln']));
 
-require("../footer.php");
+if ($showq) {
+    echo printfilter(filter($disp['html']), false);
+}
+echo printfilter(filter($disp['soln']), false);
+
+require_once "../footer.php";
 
 ?>
