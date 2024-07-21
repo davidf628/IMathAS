@@ -47,6 +47,8 @@ $allowedmacros[] = "jsx_getCoords";
 $allowedmacros[] = "jsxSuspendUpdate";
 $allowedmacros[] = "jsxUnsuspendUpdate";
 $allowedmacros[] = "jsxSetChild";
+$allowedmacros[] = "jsxMultiBoard";
+$allowedmacros[] = "jsxArrangeBoardsHoriz";
 
 function jsx_getlibrarylink() {
 	return "//cdn.jsdelivr.net/npm/jsxgraph@1.9.2/distrib/jsxgraphcore.js";
@@ -1686,6 +1688,52 @@ function jsxBoard($type, $ops=array()) {
 	
 }
 
+function jsxMultiBoard(...$args) {
+    $boards = [];
+    for ($i = 0; $i < count($args); $i+=2) {
+        $boardtype = $args[$i];
+        $boardopts = $args[$i+1];
+
+        print_r("{$boardtype}\n");
+        print_r($boardopts);
+
+        if (gettype($boardtype) == 'string' && gettype($boardopts) == 'array') {
+            
+            $id = uniqid();
+            if($type == 'rectangular') {
+                $boards[] = jsx_createrectangularboard($id, $boardopts);
+            } elseif ($type == 'polar') {
+                $boards[] = jsx_createpolarboard($id, $boardopts);
+            } elseif ($type == 'geometry') {
+                $boards[] = jsx_creategeometrymultiboard($id, $boardopts);
+            }
+         
+        } else {
+            echo "Eek! jsxMultiBoard expects a variable number of parameters that show up
+              in pairs. The first of which give the type of board first and then an array 
+              containing any options";
+        }
+    }
+    return $boards;
+}
+
+function jsxArrangeBoardsHoriz(...$args) {
+    //$cntrd = $centered === 'true' ? "margin:auto;" : "";
+	//$ratio = 100 * ($height / $width);
+  
+	// Start output string by getting script
+	////////////// REMOVED FOR DEBUGGING -------    $out = jsx_getscript();
+  
+	// make board
+	$out .= "<div class='jxgboardwrapper' style='max-width:{$width}px; max-height:{$height}px; {$cntrd}; float:left'>";
+    foreach ($args as $label) {
+	  $out .= "<div id='jxgboard_{$label}' style='background-color:#FFF; width:100%; height:0px; padding-bottom:{$ratio}%'></div>";
+    }
+	$out .= "</div>";
+
+    return $out;
+}
+
 // Creates a link to the jsx include file
 function jsx_getscript () {
 	
@@ -1749,8 +1797,34 @@ function jsx_setupboard ($label, $width, $height, $centered) {
   
 	// make board
 	$out .= "<div class='jxgboardwrapper' style='max-width:{$width}px; max-height:{$height}px; {$cntrd}'>";
-	$out .= "<div id='jxgboard_{$label}' style='background-color:#FFF; width:100%; height:0px; padding-bottom:{$ratio}%;'></div>";
+	$out .= "<div id='jxgboard_{$label}' style='background-color:#FFF; width:100%; height:0px; padding-bottom:{$ratio}%'></div>";
 	$out .= "</div>";
+  
+	// Start script
+	$out .= "<script type='text/javascript'>";
+  
+	// We build construction function inline, push function to initstack to load async
+	$out .= "function makeBoard{$label}() {";
+    $out .= "try {";
+	$out .= "JXG.Options.text.fontSize = 16;";
+	$out .= 'JXG.Options.text.cssDefaultStyle = "font-family:Serif;";';
+	$out .= 'JXG.Options.axis.lastArrow.size = 5;';
+	
+	// This is where new content gets inserted
+	$out .= "/*INSERTHERE*/";
+	
+	// End of construction function. Push it to initstack
+	$out .= "} catch(err){console.log(err);}";
+    $out .= "}";
+	$out .= "initstack.push(makeBoard{$label});";
+    $out .= "</script>"; // End of script
+
+	return $out;
+
+}
+
+// Set up a board. Auxillary functions
+function jsx_setupmultiboard ($label) {
   
 	// Start script
 	$out .= "<script type='text/javascript'>";
@@ -1820,6 +1894,50 @@ function jsx_creategeometryboard($label, $ops) {
 	return substr_replace($boardinit, $out, strpos($boardinit, "/*INSERTHERE*/"), 0);
 }
 
+// creates a board with no axes
+function jsx_creategeometrymultiboard($label, $ops) {
+  
+	// Set default values
+	$width = isset($ops['size'][0]) ? $ops['size'][0] : 350; // board width
+	$height = isset($ops['size'][1]) ? $ops['size'][1] : 350; // board height
+	$navBar = isset($ops['navbar']) ? jsx_getbool($ops['navbar']) : 'true';
+	$zoom = isset($ops['zoom']) ? jsx_getbool($ops['zoom']) : 'true';
+	$pan = isset($ops['pan']) ? jsx_getbool($ops['pan']) : 'true';
+	$centered = isset($ops['centered']) ? jsx_getbool($ops['centered']) : 'false';
+    $title = Sanitize::encodeStringForJavascript($ops['title'] ?? '');
+    $description = Sanitize::encodeStringForJavascript($ops['description'] ?? '');
+  
+	//set the min and max x-values if provided, else default to [-5, 5]
+	$xmin = isset($ops['bounds'][0]) ? $ops['bounds'][0] : -5;
+	$xmax = isset($ops['bounds'][1]) ? $ops['bounds'][1] : 5;
+	$ymin = isset($ops['bounds'][2]) ? $ops['bounds'][2] : -5;
+	$ymax = isset($ops['bounds'][3]) ? $ops['bounds'][3] : 5;
+
+	// Create the board
+	$out = "window.board_{$label} = JXG.JSXGraph.initBoard('jxgboard_{$label}', {
+        boundingbox: [{$xmin}, {$ymax}, {$xmax}, {$ymin}],
+        axis: false,
+        showCopyright: false,
+        showNavigation: {$navBar},
+        zoom: {
+			enabled: {$zoom},
+            factorX: 1.25,
+            factorY: 1.25,
+            wheel: {$zoom},
+            needshift: false,
+            eps: 0.1
+        },
+        pan: {
+            enabled: {$pan},
+            needshift: false
+        },
+        title: '$title',
+        description: '$description'
+    });";
+
+	$boardinit = jsx_setupmultiboard($label);
+	return substr_replace($boardinit, $out, strpos($boardinit, "/*INSERTHERE*/"), 0);
+}
 
 // creates a board with a rectangular set of axes on it
 function jsx_createrectangularboard ($label, $ops = array()) {
