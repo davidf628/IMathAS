@@ -1700,11 +1700,12 @@ function jsxMultiBoard(...$args) {
         if (gettype($boardtype) == 'string' && gettype($boardopts) == 'array') {
             
             $id = uniqid();
-            if($type == 'rectangular') {
+
+            if($boardtype == 'rectangular') {
                 $boards[] = jsx_createrectangularboard($id, $boardopts);
-            } elseif ($type == 'polar') {
+            } elseif ($boardtype == 'polar') {
                 $boards[] = jsx_createpolarboard($id, $boardopts);
-            } elseif ($type == 'geometry') {
+            } elseif ($boardtype == 'geometry') {
                 $boards[] = jsx_creategeometrymultiboard($id, $boardopts);
             }
          
@@ -1718,18 +1719,28 @@ function jsxMultiBoard(...$args) {
 }
 
 function jsxArrangeBoardsHoriz(...$args) {
+
+    // $args is an array of jsx-boards which contain all the javascript code to create the board
+
     //$cntrd = $centered === 'true' ? "margin:auto;" : "";
 	//$ratio = 100 * ($height / $width);
   
 	// Start output string by getting script
-	////////////// REMOVED FOR DEBUGGING -------    $out = jsx_getscript();
+	$out = jsx_getscript_DEBUG();
+    echo "POOPLE POPPLE!\n\n\n";
   
 	// make board
-	$out .= "<div class='jxgboardwrapper' style='max-width:{$width}px; max-height:{$height}px; {$cntrd}; float:left'>";
-    foreach ($args as $label) {
-	  $out .= "<div id='jxgboard_{$label}' style='background-color:#FFF; width:100%; height:0px; padding-bottom:{$ratio}%'></div>";
+	$out .= "<div class='jxgboardwrapper' style='max-width:300px; max-height:300px; display:flex'>";
+    foreach ($args as $board) {
+        $label = jsx_getboardname($board);
+	    $out .= "<div id='jxgboard_{$label}' style='background-color:#FFF; width:100%; height:0px; padding-bottom:100%'></div>";
+        $out .= "&emsp;";
     }
 	$out .= "</div>";
+
+    foreach ($args as $board) {
+        $out .= $board;
+    }
 
     return $out;
 }
@@ -1786,6 +1797,23 @@ function jsx_getscript () {
 	}
 }
 
+// Creates a link to the jsx include file
+function jsx_getscript_DEBUG () {
+	
+	if (isset($GLOBALS['assessUIver']) && $GLOBALS['assessUIver'] > 1) {
+		return '<script type="text/javascript" src="https:'.jsx_getlibrarylink().'"></script>';	
+	} else {
+		return 
+			'<script type="text/javascript">if (typeof JXG === "undefined" && typeof JXGscriptloaded === "undefined") {
+			var jsxgloadscript = document.createElement("script");
+			jsxgloadscript.src = "'.jsx_getlibrarylink().'";
+			document.getElementsByTagName("head")[0].appendChild(jsxgloadscript);
+			JXGscriptloaded = true;
+			}
+			</script>';
+	}
+}
+
 // Set up a board. Auxillary functions
 function jsx_setupboard ($label, $width, $height, $centered) {
 	
@@ -1793,7 +1821,7 @@ function jsx_setupboard ($label, $width, $height, $centered) {
 	$ratio = 100 * ($height / $width);
   
 	// Start output string by getting script
-	$out = jsx_getscript();
+	$out = jsx_getscript_DEBUG();
   
 	// make board
 	$out .= "<div class='jxgboardwrapper' style='max-width:{$width}px; max-height:{$height}px; {$cntrd}'>";
